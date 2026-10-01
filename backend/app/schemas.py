@@ -202,12 +202,12 @@ class EquipmentEntry(BaseModel):
 
     field_0: str | None = None  # 机械编号
     field_1: str | None = None  # 机械名称
-    field_2: str | None = None  # 规格型号
-    field_3: str | None = None  # 购置日期
-    field_4: str | None = None  # 上次保养
-    field_5: str | None = None  # 下次保养日
-    field_6: str | None = None  # 操作人员
-    field_7: str | None = None  # 机械状态
+    field_2: str | None = None  # 机械类型
+    field_3: str | None = None  # 规格型号
+    field_4: str | None = None  # 购置日期
+    field_5: str | None = None  # 上次保养（由保养记录推导）
+    field_6: str | None = None  # 下次保养日（上次保养+类型周期）
+    field_7: str | None = None  # 所属班组
 
 class SeedlingEntry(BaseModel):
     """苗圃明细结构。"""

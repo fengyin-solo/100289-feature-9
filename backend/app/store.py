@@ -28,8 +28,12 @@ class Store:
         return None
 
     def overview(self) -> dict[str, object]:
+        # 保养记录、类型阈值是园林机械的内部子表，不算独立业务模块。
+        hidden = {"equipment_maintenance", "equipment_type_rule"}
         modules: list[dict[str, object]] = []
         for name in self.module_names():
+            if name in hidden:
+                continue
             rows = self.rows(name)
             modules.append({
                 "name": name,
