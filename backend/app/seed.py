@@ -1,7 +1,121 @@
 """示例数据：每个模块给几条不同状态的记录，方便起服务后立刻看到内容。"""
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import Any
+
+def _equipment_rows() -> list[dict[str, Any]]:
+    """园林机械示例数据：保养相关日期相对今天生成，保证各种调度情形都能演示。
+
+    口径：下次保养日 = 上次保养 + 该类型保养周期；同一台机械同一天重复登记保养，
+    只认第一回，后到的记录在服务层重算时会被标记为作废。
+    """
+    today = date.today()
+
+    def iso(d: date) -> str:
+        return d.isoformat()
+
+    def row(
+        no: int,
+        code: str,
+        name: str,
+        eq_type: str,
+        team: str,
+        *,
+        purchased: date,
+        last_maintain: date | None,
+        status: str,
+        operator: str,
+    ) -> dict[str, Any]:
+        return {
+            "id": no,
+            "status": status,
+            "pending": status != "已报废",
+            "abnormal": False,
+            "机械编号": code,
+            "机械名称": name,
+            "机械类型": eq_type,
+            "所属班组": team,
+            "规格型号": f"{eq_type}-标准型{no}",
+            "购置日期": iso(purchased),
+            "上次保养": iso(last_maintain) if last_maintain else "",
+            "下次保养日": "",  # 由服务层按「上次保养 + 周期」统一重算
+            "操作人员": operator,
+            "机械状态": status,
+        }
+
+    return [
+        # 距下次保养还有 20 天，可正常调度
+        row(1, "EQUI-0001", "斯蒂尔绿篱机", "绿篱机", "绿化一班",
+            purchased=today - timedelta(days=400),
+            last_maintain=today - timedelta(days=10),
+            status="可用", operator="王建国"),
+        # 距下次保养只剩 3 天：调度要拦下并说明缘由
+        row(2, "EQUI-0002", "小松汽油链锯", "油锯", "绿化一班",
+            purchased=today - timedelta(days=300),
+            last_maintain=today - timedelta(days=27),
+            status="使用中", operator="王建国"),
+        # 已超期 6 天：调度要拦下
+        row(3, "EQUI-0003", "本田打草机", "割草机", "绿化二班",
+            purchased=today - timedelta(days=500),
+            last_maintain=today - timedelta(days=36),
+            status="可用", operator="李秀兰"),
+        # 从未保养：从购置日期起算，早已超期
+        row(4, "EQUI-0004", "沃施高枝油锯", "油锯", "绿化二班",
+            purchased=today - timedelta(days=120),
+            last_maintain=None,
+            status="可用", operator="李秀兰"),
+        # 保养周期内，但使用年限超过上限：可调度，同时给出超龄提示
+        row(5, "EQUI-0005", "老款斯蒂尔割灌机", "割灌机", "绿化一班",
+            purchased=today - timedelta(days=365 * 7),
+            last_maintain=today - timedelta(days=5),
+            status="使用中", operator="赵大力"),
+        # 正在保养中，暂不参与排班
+        row(6, "EQUI-0006", "园林吹风机", "吹风机", "绿化一班",
+            purchased=today - timedelta(days=200),
+            last_maintain=today - timedelta(days=40),
+            status="保养中", operator="赵大力"),
+        # 已报废：保养看板与排班一律不出现
+        row(7, "EQUI-0007", "报废旧油锯", "油锯", "绿化二班",
+            purchased=today - timedelta(days=365 * 10),
+            last_maintain=today - timedelta(days=300),
+            status="已报废", operator="李秀兰"),
+        # 距下次保养 10 天，可调度
+        row(8, "EQUI-0008", "丸中绿篱修剪机", "绿篱机", "绿化二班",
+            purchased=today - timedelta(days=150),
+            last_maintain=today - timedelta(days=20),
+            status="可用", operator="陈阿妹"),
+    ]
+
+
+def _equipment_maintenance_rows() -> list[dict[str, Any]]:
+    """保养记录示例：含同一台机械同一天重复登记的情况，重算时只保留第一回。"""
+    today = date.today()
+    return [
+        {"id": 1, "机械编号": "EQUI-0001", "保养日期": (today - timedelta(days=10)).isoformat(),
+         "保养内容": "更换刀片、加注润滑脂", "登记人": "王建国", "登记班组": "绿化一班",
+         "有效": True, "作废原因": ""},
+        {"id": 2, "机械编号": "EQUI-0002", "保养日期": (today - timedelta(days=27)).isoformat(),
+         "保养内容": "清洗化油器、检查链条", "登记人": "王建国", "登记班组": "绿化一班",
+         "有效": True, "作废原因": ""},
+        {"id": 3, "机械编号": "EQUI-0003", "保养日期": (today - timedelta(days=36)).isoformat(),
+         "保养内容": "更换打草绳、空滤", "登记人": "李秀兰", "登记班组": "绿化二班",
+         "有效": True, "作废原因": ""},
+        # 重复保养：与 id=4 同机同日，只认第一回（id=4），本条作废
+        {"id": 4, "机械编号": "EQUI-0005", "保养日期": (today - timedelta(days=5)).isoformat(),
+         "保养内容": "更换火花塞", "登记人": "赵大力", "登记班组": "绿化一班",
+         "有效": True, "作废原因": ""},
+        {"id": 5, "机械编号": "EQUI-0005", "保养日期": (today - timedelta(days=5)).isoformat(),
+         "保养内容": "重复补录：换机油", "登记人": "赵大力", "登记班组": "绿化一班",
+         "有效": False, "作废原因": "与同日首次保养记录重复，只认第一回"},
+        {"id": 6, "机械编号": "EQUI-0006", "保养日期": (today - timedelta(days=40)).isoformat(),
+         "保养内容": "定期保养入厂", "登记人": "赵大力", "登记班组": "绿化一班",
+         "有效": True, "作废原因": ""},
+        {"id": 7, "机械编号": "EQUI-0008", "保养日期": (today - timedelta(days=20)).isoformat(),
+         "保养内容": "打磨刀片、紧固螺丝", "登记人": "陈阿妹", "登记班组": "绿化二班",
+         "有效": True, "作废原因": ""},
+    ]
+
 
 SEED_ROWS: dict[str, list[dict[str, Any]]] = {
     "plot": [{'id': 1,
@@ -508,42 +622,8 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
   '上次检修': '园建设施样例3',
   '损坏描述': '园建设施样例3',
   '设施状态': '园建设施样例3'}],
-    "equipment": [{'id': 1,
-  'status': '可用',
-  'pending': True,
-  'abnormal': False,
-  '机械编号': 'EQUI-0001',
-  '机械名称': '园林机械样例1',
-  '规格型号': '园林机械样例1',
-  '购置日期': '2026-09-01',
-  '上次保养': '园林机械样例1',
-  '下次保养日': '园林机械样例1',
-  '操作人员': '园林机械样例1',
-  '机械状态': '园林机械样例1'},
- {'id': 2,
-  'status': '使用中',
-  'pending': True,
-  'abnormal': True,
-  '机械编号': 'EQUI-0002',
-  '机械名称': '园林机械样例2',
-  '规格型号': '园林机械样例2',
-  '购置日期': '2026-09-02',
-  '上次保养': '园林机械样例2',
-  '下次保养日': '园林机械样例2',
-  '操作人员': '园林机械样例2',
-  '机械状态': '园林机械样例2'},
- {'id': 3,
-  'status': '保养中',
-  'pending': False,
-  'abnormal': False,
-  '机械编号': 'EQUI-0003',
-  '机械名称': '园林机械样例3',
-  '规格型号': '园林机械样例3',
-  '购置日期': '2026-09-03',
-  '上次保养': '园林机械样例3',
-  '下次保养日': '园林机械样例3',
-  '操作人员': '园林机械样例3',
-  '机械状态': '园林机械样例3'}],
+    "equipment": _equipment_rows(),
+    "equipment_maintenance": _equipment_maintenance_rows(),
     "seedling": [{'id': 1,
   'status': '正常',
   'pending': True,
